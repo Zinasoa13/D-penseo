@@ -149,6 +149,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import axios from 'axios'
 
 const email = ref('')
 const password = ref('')
@@ -170,31 +171,29 @@ const handleLogin = async () => {
   error.value = ''
   success.value = ''
 
-  // Simulate API call delay
-  await new Promise(resolve => setTimeout(resolve, 1000))
+  try {
+    const res = await axios.post("http://localhost:5000/api/auth/login", {
+      email: email.value,
+      password: password.value
+    })
 
-  const storedUser = JSON.parse(localStorage.getItem('user'))
+    // Sauvegarder le token JWT + infos utilisateur
+    localStorage.setItem("token", res.data.token)
+    localStorage.setItem("user", JSON.stringify(res.data.user))
 
-  if (storedUser && storedUser.email === email.value && storedUser.password === password.value) {
-    success.value = 'Connexion réussie !'
+    success.value = res.data.message
+
     setTimeout(() => {
       window.location.href = '/home'
     }, 1500)
-  } else {
-    error.value = 'Email ou mot de passe incorrect.'
+  } catch (err) {
+    error.value = err.response?.data?.message || "Une erreur est survenue."
+  } finally {
+    isLoading.value = false
   }
-  
-  isLoading.value = false
-}
-
-// Création d'un utilisateur par défaut pour tester
-if (!localStorage.getItem('user')) {
-  localStorage.setItem('user', JSON.stringify({
-    email: 'test@example.com',
-    password: '123456'
-  }))
 }
 </script>
+
 
 <style scoped>
 /* Custom animations */

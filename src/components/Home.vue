@@ -210,42 +210,47 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import axios from 'axios'
 
 const balance = ref(0)
 const depenses = ref([])
 const revenus = ref([])
 
 const activeSection = ref('accueil')
-
 const showModal = ref(false)
 const modalType = ref(null)
 const form = ref({ nom: '', montant: null })
 
-// Calculs des totaux
-const totalRevenus = computed(() => {
-  return revenus.value.reduce((sum, item) => sum + item.montant, 0)
-})
-
-const totalDepenses = computed(() => {
-  return depenses.value.reduce((sum, item) => sum + item.montant, 0)
-})
-
-// Liste affichée selon la section active
-const currentList = computed(() => {
-  if (activeSection.value === 'depenses') {
-    return depenses.value.map(d => ({ ...d, type: 'depense' }))
-      .sort((a, b) => b.date - a.date)
-  } else if (activeSection.value === 'revenus') {
-    return revenus.value.map(r => ({ ...r, type: 'revenu' }))
-      .sort((a, b) => b.date - a.date)
-  } else {
-    // Accueil : derniers mouvements (limité à 10)
-    return [...revenus.value.map(r => ({ ...r, type: 'revenu' })),
-            ...depenses.value.map(d => ({ ...d, type: 'depense' }))]
-            .sort((a, b) => b.date - a.date)
-            .slice(0, 10)
+// Charger transactions à la connexion
+onMounted(async () => {
+  const token = localStorage.getItem("token")
+  try {
+    const res = await axios.get("http://localhost:5000/api/transactions", {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    const all = res.data
+    revenus.value = all.filter(t => t.type === "revenu")
+    depenses.value = all.filter(t => t.type === "depense")
+    balance.value = revenus.value.reduce((s,r)=>s+r.montant,0) - depenses.value.reduce((s,d)=>s+d.montant,0)
+  } catch (err) {
+    console.error("Erreur chargement transactions", err)
   }
+})
+
+// Totaux
+const totalRevenus = computed(() => revenus.value.reduce((s, r) => s + r.montant, 0))
+const totalDepenses = computed(() => depenses.value.reduce((s, d) => s + d.montant, 0))
+
+// Liste dynamique
+const currentList = computed(() => {
+  const all = [
+    ...revenus.value.map(r => ({ ...r, type: 'revenu' })),
+    ...depenses.value.map(d => ({ ...d, type: 'depense' }))
+  ]
+  return activeSection.value === 'accueil'
+    ? all.sort((a, b) => b.date - a.date).slice(0, 10)
+    : all.filter(t => t.type === activeSection.value).sort((a, b) => b.date - a.date)
 })
 
 function openModal(type) {
@@ -258,29 +263,62 @@ function closeModal() {
   showModal.value = false
 }
 
-function confirmTransaction() {
-  if (!form.value.nom || !form.value.montant) return
+async function confirmTransaction() {
+  console.log("confirmTransaction appelé !", form.value, modalType.value)
 
-  const transaction = { ...form.value, date: Date.now() }
-
-  if (modalType.value === 'revenu') {
-    revenus.value.push(transaction)
-    balance.value += form.value.montant
-  } else {
-    depenses.value.push(transaction)
-    balance.value -= form.value.montant
+  if (!form.value.nom || !form.value.montant) {
+    console.warn("Nom ou montant manquant")
+    return
   }
 
+  const token = localStorage.getItem("token")
+  console.log("Token récupéré :", token)
+
+  try {
+    console.log("Envoi de la requête POST au backend...")
+    const res = await axios.post(
+      "http://localhost:5000/api/transactions",
+      {
+        nom: form.value.nom,
+        montant: form.value.montant,
+        type: modalType.value
+      },
+      {
+        headers: { Authorization: `Bearer ${token}` }
+      }
+    )
+
+    console.log("Réponse reçue du backend :", res.data)
+
+    const transaction = res.data
+
+    if (transaction.type === "revenu") {
+      console.log("Ajout revenu :", transaction)
+      revenus.value.push(transaction)
+      balance.value += transaction.montant
+    } else {
+      console.log("Ajout dépense :", transaction)
+      depenses.value.push(transaction)
+      balance.value -= transaction.montant
+    }
+  } catch (err) {
+    console.error("Erreur ajout transaction", err)
+  }
+
+  console.log("Fermeture modal")
   closeModal()
 }
 
+
 function logout() {
-  // Ici vous pouvez ajouter la logique de déconnexion
-  // Par exemple: redirection vers la page de login, nettoyage du localStorage, etc.
-  console.log('Déconnexion...')
-  window.location.href = '/login' // exemple de redirection
+  localStorage.removeItem("token")
+  localStorage.removeItem("user")
+  window.location.href = '/login'
 }
 </script>
+
+
+
 
 <style scoped>
 @keyframes fade-in {

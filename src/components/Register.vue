@@ -148,6 +148,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import axios from "axios"
 
 const username = ref('')
 const email = ref('')
@@ -197,6 +198,8 @@ const getStrengthText = (strength) => {
   }
 }
 
+
+
 const handleRegister = async () => {
   if (!email.value || !password.value || !username.value) {
     error.value = 'Tous les champs sont obligatoires.'
@@ -212,28 +215,24 @@ const handleRegister = async () => {
   error.value = ''
 
   try {
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500))
-
-    const newUser = {
+    const res = await axios.post("http://localhost:5000/api/auth/register", {
       username: username.value,
       email: email.value,
       password: password.value,
-    }
+    })
 
-    localStorage.setItem('user', JSON.stringify(newUser))
-
-    success.value = 'Compte créé avec succès ! Redirection en cours...'
+    success.value = res.data.message + " Redirection en cours..."
     
     setTimeout(() => {
       window.location.href = '/login'
     }, 2000)
   } catch (err) {
-    error.value = 'Une erreur est survenue. Veuillez réessayer.'
+    error.value = err.response?.data?.message || 'Une erreur est survenue.'
   } finally {
     isLoading.value = false
   }
 }
+
 </script>
 
 <style scoped>
